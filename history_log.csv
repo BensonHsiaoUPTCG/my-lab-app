@@ -1,8 +1,0 @@
-Time,Asset,Action,Detail
-2025-12-04 14:30:36,Laser Inducer,DELETED,Removed from database
-2025-12-04 14:28:27,laser engraving machine,CREATED,Added to LAB-110 by Admin
-2025-12-04 14:27:27,Laser Inducer,CREATED,Added to  by Admin
-2025-12-04 14:21:19,PI Film,DELETED,Removed from database
-2025-12-04 14:21:14,PI Film,STATUS_CHANGE,In Stock -> In Stock ()
-2025-12-04 14:20:51,PI Film,CREATED,Added to cabnet-108 by Admin
-2025-12-04 14:20:47,PI Film,CREATED,Added to cabnet-108 by Admin
