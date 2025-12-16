@@ -5,16 +5,14 @@ import matplotlib.pyplot as plt
 from datetime import datetime, date
 import qrcode
 from io import BytesIO
-import hashlib # For password security
+import hashlib 
 
 # --- 1. Configuration & Styling ---
 st.set_page_config(page_title="IMS - Lab Asset Manager", page_icon="🔬", layout="wide")
 
-# Custom CSS
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
-    
     div[data-testid="stMetric"] {
         background-color: #ffffff;
         padding: 15px;
@@ -22,17 +20,14 @@ st.markdown("""
         box-shadow: 1px 1px 3px rgba(0,0,0,0.1);
         border: 1px solid #e0e0e0;
     }
-    
     div[data-testid="stMetric"] label { color: #666666 !important; }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #333333 !important; }
-
     img { max-width: 100%; border-radius: 8px; }
     .stButton>button { width: 100%; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 2. Model Layer (Data & Logic) ---
-# FIX: Changed file extensions to .json
 FILE_PATH = 'inventory_v2.json'
 HISTORY_PATH = 'history_log.json'
 USER_DB_PATH = 'users.json'
@@ -41,14 +36,8 @@ IMAGE_DIR = 'images'
 if not os.path.exists(IMAGE_DIR):
     os.makedirs(IMAGE_DIR)
 
-# --- User Management Functions ---
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
-
-def check_hashes(password, hashed_text):
-    if make_hashes(password) == hashed_text:
-        return hashed_text
-    return False
 
 def create_user_db():
     if not os.path.exists(USER_DB_PATH):
@@ -57,18 +46,19 @@ def create_user_db():
             'Password': [make_hashes('admin123')],
             'Role': ['Admin']
         })
-        # FIX: Save as JSON with indentation for readability
         df.to_json(USER_DB_PATH, orient='records', indent=4, force_ascii=False)
 
 def login_user(username, password):
     create_user_db()
-    # FIX: Read from JSON
-    df = pd.read_json(USER_DB_PATH, orient='records')
-    hashed_pswd = make_hashes(password)
-    result = df[df['Username'] == username]
-    if not result.empty:
-        if result.iloc[0]['Password'] == hashed_pswd:
-            return result.iloc[0]['Role']
+    try:
+        df = pd.read_json(USER_DB_PATH, orient='records')
+        hashed_pswd = make_hashes(password)
+        result = df[df['Username'] == username]
+        if not result.empty:
+            if result.iloc[0]['Password'] == hashed_pswd:
+                return result.iloc[0]['Role']
+    except:
+        return None
     return None
 
 def add_user(username, password, role='Student'):
@@ -83,19 +73,21 @@ def add_user(username, password, role='Student'):
         'Role': [role]
     })
     df = pd.concat([df, new_user], ignore_index=True)
-    # FIX: Save as JSON
     df.to_json(USER_DB_PATH, orient='records', indent=4, force_ascii=False)
     return True
 
-# --- Inventory Functions ---
 def load_data():
     if os.path.exists(FILE_PATH):
-        # FIX: Read from JSON
         df = pd.read_json(FILE_PATH, orient='records')
         if 'Due Date' not in df.columns: df['Due Date'] = None
+        
+        # FIX: Date Cleanup Logic
+        # Convert to string, then replace 'nan', 'None', 'NaT' with empty string
+        df['Due Date'] = df['Due Date'].astype(str)
+        df['Due Date'] = df['Due Date'].replace(['nan', 'None', 'NaT', '<NA>'], '')
+        
         return df
     else:
-        # Default Data
         data = {
             'ID': [101, 102],
             'Name': ['Arduino Uno R3', 'Raspberry Pi 4'],
@@ -107,17 +99,17 @@ def load_data():
                 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/71/Arduino_Uno_major_components.JPG/320px-Arduino_Uno_major_components.JPG', 
                 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Raspberry_Pi_4_Model_B_-_Side.jpg/320px-Raspberry_Pi_4_Model_B_-_Side.jpg'
             ], 
-            'Due Date': [None, '2023-12-31']
+            'Due Date': ['', '2023-12-31'] # Use empty string for no date
         }
         df = pd.DataFrame(data)
-        # FIX: Save default data as JSON
         df.to_json(FILE_PATH, orient='records', indent=4, force_ascii=False)
         return df
 
 def save_data(df):
-    # FIX: Save as JSON. indent=4 makes it pretty-printed (teacher friendly)
-    # force_ascii=False allows Chinese characters to be stored correctly
-    df.to_json(FILE_PATH, orient='records', indent=4, force_ascii=False)
+    # FIX: Ensure Due Date is clean string before saving
+    df['Due Date'] = df['Due Date'].astype(str).replace(['nan', 'None', 'NaT', '<NA>'], '')
+    # date_format='iso' helps prevents timestamp conversion issues
+    df.to_json(FILE_PATH, orient='records', indent=4, force_ascii=False, date_format='iso')
 
 def log_history(asset_name, action, detail):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -127,13 +119,11 @@ def log_history(asset_name, action, detail):
         hist_df = pd.concat([new_log, hist_df], ignore_index=True)
     else:
         hist_df = new_log
-    # FIX: Save as JSON
     hist_df.to_json(HISTORY_PATH, orient='records', indent=4, force_ascii=False)
     return hist_df
 
 def load_history():
     if os.path.exists(HISTORY_PATH): 
-        # FIX: Read from JSON
         return pd.read_json(HISTORY_PATH, orient='records')
     return pd.DataFrame(columns=['Time', 'Asset', 'Action', 'Detail'])
 
@@ -163,7 +153,7 @@ if 'username' not in st.session_state:
 if 'role' not in st.session_state:
     st.session_state['role'] = 'Student'
 
-st.sidebar.title("🔬 IMS Mobile (JSON Ver.)")
+st.sidebar.title("🔬 IMS Mobile (v2.3)")
 
 if not st.session_state['logged_in']:
     tab_login, tab_signup = st.sidebar.tabs(["Login", "Sign Up"])
@@ -230,17 +220,14 @@ else:
 menu = st.sidebar.radio("Menu", menu_options)
 
 df = load_data()
-
 today = date.today().strftime("%Y-%m-%d")
-# Handle case where Due Date might be missing in JSON logic
-if 'Due Date' not in df.columns:
-    df['Due Date'] = None
-df['Due Date'] = df['Due Date'].astype(str)
 
+# FIX: Robust Overdue Filtering
+# Since we converted all Due Dates to strings (and empty strings), we filter carefully
+# Condition: Status is Checked Out AND Due Date is not empty AND Due Date < Today
 overdue_df = df[
     (df['Status'] == 'Checked Out') & 
-    (df['Due Date'] != 'nan') & 
-    (df['Due Date'] != 'None') & 
+    (df['Due Date'] != '') & 
     (df['Due Date'] < today)
 ]
 
@@ -253,7 +240,6 @@ if menu == "📊 Dashboard":
         c3.metric("⚠️ Overdue", f"{len(overdue_df)}", delta="-Action Required", delta_color="inverse")
     else:
         c3.metric("Overdue Items", "0", delta="All Good")
-    
     st.divider()
     if not overdue_df.empty:
         st.error(f"⚠️ Warning: {len(overdue_df)} items are overdue!")
@@ -268,7 +254,6 @@ if menu == "📊 Dashboard":
             fig1.patch.set_alpha(0)
             ax1.pie(cat_counts, labels=cat_counts.index, autopct='%1.1f%%', textprops={'color':"white" if st.session_state.get('dark_mode', True) else "black"})
             st.pyplot(fig1)
-
     with col_recent:
         st.subheader("Latest Activity")
         hist = load_history()
@@ -282,14 +267,12 @@ elif menu == "🔍 Search & View":
     col_search, _ = st.columns([3, 1])
     with col_search:
         search_term = st.text_input("Search assets...", placeholder="Name, ID, Location...")
-    
     filtered_df = df.copy()
     if search_term:
         filtered_df = filtered_df[
             filtered_df['Name'].str.contains(search_term, case=False) | 
             filtered_df['ID'].astype(str).str.contains(search_term)
         ]
-
     if not filtered_df.empty:
         cols = st.columns(3)
         for idx, row in filtered_df.iterrows():
@@ -307,13 +290,11 @@ elif menu == "🔍 Search & View":
                 status_color = "green" if row['Status'] == 'In Stock' else "red" if row['Status'] == 'Checked Out' else "orange"
                 st.markdown(f"**Loc:** {row['Location']}")
                 st.markdown(f":{status_color}[● {row['Status']}]")
-                
-                if row['Status'] == 'Checked Out' and row['Due Date'] and row['Due Date'] != 'nan':
+                if row['Status'] == 'Checked Out' and row['Due Date'] != '':
                     if str(row['Due Date']) < today:
                          st.markdown(f"🔴 **Overdue: {row['Due Date']}**")
                     else:
                          st.markdown(f"📅 Due: {row['Due Date']}")
-
                 if st.button("📱 QR Code", key=f"qr_{row['ID']}"):
                     qr_img = generate_qr_code(f"ID: {row['ID']}\nName: {row['Name']}")
                     st.image(qr_img, width=150)
@@ -339,9 +320,10 @@ elif menu == "➕ Add Asset":
         if st.form_submit_button("Save Asset") and name:
             img_path = save_uploaded_image(img_file)
             new_id = df['ID'].max() + 1 if not df.empty else 101
+            # FIX: Ensure Due Date is empty string for new items
             new_entry = pd.DataFrame([{
                 'ID': new_id, 'Name': name, 'Category': cat, 'Location': loc, 
-                'Status': status, 'Quantity': qty, 'Image': img_path, 'Due Date': None
+                'Status': status, 'Quantity': qty, 'Image': img_path, 'Due Date': ''
             }])
             df = pd.concat([df, new_entry], ignore_index=True)
             save_data(df)
@@ -358,8 +340,20 @@ elif menu == "⚙️ Admin":
         st.warning("Access Denied.")
         st.stop()
     st.title("⚙️ Admin Controls")
-    tab1, tab2 = st.tabs(["Update Status", "Delete"])
     
+    # Backup Section
+    st.subheader("💾 Database Backup")
+    with open(FILE_PATH, "r", encoding='utf-8') as f:
+        json_data = f.read()
+    st.download_button(
+        label="Download Inventory JSON",
+        data=json_data,
+        file_name="inventory_backup.json",
+        mime="application/json"
+    )
+    st.divider()
+
+    tab1, tab2 = st.tabs(["Update Status", "Delete"])
     with tab1:
         asset_id = st.selectbox("Select Asset", df['ID'].tolist())
         row = df[df['ID'] == asset_id].iloc[0]
@@ -368,12 +362,18 @@ elif menu == "⚙️ Admin":
         with c1: new_status = st.selectbox("New Status", ["In Stock", "Checked Out", "Maintenance", "Lost"])
         with c2: 
             borrower = st.text_input("Borrower/Note")
-            due_date = st.date_input("Due Date", min_value=date.today()) if new_status == "Checked Out" else None
-            
+            # Date Input Widget
+            due_date_input = st.date_input("Due Date", min_value=date.today()) if new_status == "Checked Out" else None
+        
         if st.button("Update"):
             df.loc[df['ID'] == asset_id, 'Status'] = new_status
-            if new_status == "Checked Out": df.loc[df['ID'] == asset_id, 'Due Date'] = due_date
-            elif new_status == "In Stock": df.loc[df['ID'] == asset_id, 'Due Date'] = None
+            
+            # FIX: Convert Date Object to String immediately to avoid JSON timestamp issues
+            if new_status == "Checked Out" and due_date_input:
+                df.loc[df['ID'] == asset_id, 'Due Date'] = str(due_date_input) # Force String
+            elif new_status == "In Stock": 
+                df.loc[df['ID'] == asset_id, 'Due Date'] = '' # Clear as empty string
+            
             save_data(df)
             log_history(row['Name'], "UPDATE", f"{new_status} by {st.session_state['username']}")
             st.success("Updated!")
